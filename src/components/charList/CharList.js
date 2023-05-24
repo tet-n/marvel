@@ -1,94 +1,92 @@
-import { Component } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import './charList.scss';
 import MarvelServices from '../../services/MarvelServices';
 import Spinner from '../Spinner/Spinner';
 import ErrorMessage from '../ErrorMessage/ErrorMessage';
 
-class CharList extends Component {
-  state = {
-    chars: [],
-    loading: false,
-    error: false,
-    moreLoading: false,
-    offset: 210,
-    charEnded: false,
-  };
+const CharList = ({ onCharSelected }) => {
+  const [chars, setChars] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const [moreLoading, setMoreLoading] = useState(false);
+  const [offset, setOffset] = useState(210);
+  const [charEnded, setCharEnded] = useState(false);
 
-  marvelService = new MarvelServices();
+  const render = useCallback((offset) => {
+    const marvelService = new MarvelServices();
+    setMoreLoading(true);
+    marvelService.getAllCharacters(offset).then(onCharListLoaded).catch(onError);
+  }, []);
 
-  componentDidMount() {
-    this.renderCarachters();
-  }
+  useEffect(() => {
+    render();
+  }, [render]);
 
-  renderCarachters = (offset) => {
-    this.onCharListLoading();
-    this.marvelService.getAllCharacters(offset).then(this.onCharListLoaded).catch(this.onError);
-  };
-
-  onCharListLoaded = (charList) => {
+  const onCharListLoaded = (charList) => {
     let ended = false;
     if (charList.length < 9) {
       ended = true;
     }
-
-    this.setState(({ chars, offset }) => ({
-      chars: [...chars, ...charList],
-      loading: false,
-      moreLoading: false,
-      offset: offset + 9,
-      charEnded: ended,
-    }));
+    setChars((prevChars) => [...prevChars, ...charList]);
+    setMoreLoading(false);
+    setLoading(false);
+    setOffset((prevOffset) => prevOffset + 9);
+    setCharEnded(ended);
   };
 
-  onCharListLoading = () => {
-    this.setState({ moreLoading: true });
+  const onError = () => {
+    setLoading(false);
+    setError(true);
   };
 
-  onCharLoading = () => {
-    this.setState({ loading: true });
+  const itemRefs = useRef([]);
+
+  const focusOnItem = (id) => {
+    itemRefs.current.forEach((item) => item.classList.remove('char__item_selected'));
+    itemRefs.current[id].classList.add('char__item_selected');
+    itemRefs.current[id].focus();
   };
-
-  onError = () => {
-    this.setState({ error: true, loading: false });
-  };
-
-  render() {
-    const { chars, loading, error, offset, moreLoading, charEnded } = this.state;
-    const isLoading = loading ? <Spinner /> : null;
-    const content =
-      loading || error ? null : <Chars chars={chars} forClick={this.props.onCharSelected} />;
-    const errorMes = error ? <ErrorMessage /> : null;
-
-    return (
-      <div className="char__list">
-        {content}
-        {isLoading}
-        {errorMes}
-        <button
-          className="button button__main button__long"
-          disabled={moreLoading}
-          style={{ display: charEnded ? 'none' : 'block' }}
-          onClick={() => this.renderCarachters(offset)}
+  const renderItems = (chars) => {
+    const items = chars.map(({ name, thumbnail, id }, i) => {
+      return (
+        <li
+          ref={(el) => (itemRefs.current[i] = el)}
+          tabIndex={0}
+          className="char__item"
+          key={id}
+          onClick={() => {
+            onCharSelected(id);
+            focusOnItem(i);
+          }}
         >
-          <div className="inner">load more</div>
-        </button>
-      </div>
-    );
-  }
-}
+          <img src={thumbnail} alt={name} />
+          <div className="char__name">{name}</div>
+        </li>
+      );
+    });
 
-const Chars = ({ chars, forClick }) => {
+    return <ul className="char__grid">{items}</ul>;
+  };
+  const items = renderItems(chars);
+
+  const isLoading = loading ? <Spinner /> : null;
+  const content = loading || error ? null : items;
+  const errorMes = error ? <ErrorMessage /> : null;
+
   return (
-    <ul className="char__grid">
-      {chars.map(({ name, thumbnail, id }) => {
-        return (
-          <li className="char__item" key={id} onClick={() => forClick(id)}>
-            <img src={thumbnail} alt={name} />
-            <div className="char__name">{name}</div>
-          </li>
-        );
-      })}
-    </ul>
+    <div className="char__list">
+      {content}
+      {isLoading}
+      {errorMes}
+      <button
+        className="button button__main button__long"
+        disabled={moreLoading}
+        style={{ display: charEnded ? 'none' : 'block' }}
+        onClick={() => render(offset)}
+      >
+        <div className="inner">load more</div>
+      </button>
+    </div>
   );
 };
 
